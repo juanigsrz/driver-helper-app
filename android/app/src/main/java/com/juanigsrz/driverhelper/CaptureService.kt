@@ -165,7 +165,8 @@ class CaptureService : Service() {
             return
         }
 
-        val cropped = full.cropBottomFraction(0.4f)
+        // TEST full-screen crop — revert to 0.4f before shipping
+        val cropped = full.cropBottomFraction(1.0f)
         full.recycle()
 
         scope.launch {

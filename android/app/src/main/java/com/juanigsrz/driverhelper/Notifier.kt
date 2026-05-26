@@ -6,10 +6,12 @@ import android.content.Context
 import android.graphics.Color
 import androidx.core.app.NotificationCompat
 import androidx.core.content.getSystemService
+import java.util.Locale
 
 object Notifier {
     private const val CHANNEL_ID = "verdict"
     private const val NOTIF_ID = 99
+    private val AR = Locale("es", "AR")
 
     private fun ensureChannel(ctx: Context) {
         val nm = ctx.getSystemService<NotificationManager>() ?: return
@@ -34,13 +36,15 @@ object Notifier {
             "MAYBE" -> "🟡"
             else    -> "🔴"
         }
-        val title = "$emoji ${v.decision}  $${"%,.0f".format(v.gross_ars)}"
+        val price = String.format(AR, "%,.0f", v.gross_ars)
+        val arsKm = String.format(AR, "%,.0f", v.ars_per_km)
+        val title = "$emoji ${v.decision} \$$price · $arsKm/km"
         val why = if (v.reasons.isEmpty()) "" else "\nwhy: " + v.reasons.joinToString("; ")
         val body = """
-            trip   ${"%.1f".format(v.total_km)} km / ${"%.0f".format(v.total_min)} min
-            dead   ${"%.1f".format(v.deadhead_km)} km (${"%.0f".format(v.deadhead_ratio * 100)}%)
-            ARS/km ${"%.0f".format(v.ars_per_km)}   net ${"%.0f".format(v.profit_ars)}
-            ARS/hr ${"%.0f".format(v.ars_per_hr)}$why
+            trip   ${String.format(AR, "%.1f", v.total_km)} km / ${String.format(AR, "%.0f", v.total_min)} min
+            dead   ${String.format(AR, "%.1f", v.deadhead_km)} km (${String.format(AR, "%.0f", v.deadhead_ratio * 100)}%)
+            ARS/km ${String.format(AR, "%,.0f", v.ars_per_km)}   net ${String.format(AR, "%,.0f", v.profit_ars)}
+            ARS/hr ${String.format(AR, "%,.0f", v.ars_per_hr)}$why
         """.trimIndent()
 
         val notif = NotificationCompat.Builder(ctx, CHANNEL_ID)

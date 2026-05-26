@@ -10,6 +10,10 @@ object ForegroundDetector {
     private val TARGETS = setOf(
         "com.ubercab.driver",
         "com.cabify.driver",
+        // TEST fake targets — revert before shipping
+        "com.miui.gallery",
+        "com.android.chrome",
+        "com.google.android.apps.photos",
     )
 
     /** Returns the matching target package if it has been used within LOOKBACK_MS. */

@@ -1,9 +1,20 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
 }
+
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+fun prop(name: String, default: String): String =
+    localProps.getProperty(name)
+        ?: project.findProperty(name)?.toString()
+        ?: default
 
 android {
     namespace = "com.juanigsrz.driverhelper"
@@ -19,12 +30,12 @@ android {
         buildConfigField(
             "String",
             "BACKEND_URL",
-            "\"${project.findProperty("BACKEND_URL") ?: "https://example.invalid"}\""
+            "\"${prop("BACKEND_URL", "https://example.invalid")}\""
         )
         buildConfigField(
             "String",
             "BACKEND_SECRET",
-            "\"${project.findProperty("BACKEND_SECRET") ?: "change-me-please"}\""
+            "\"${prop("BACKEND_SECRET", "change-me-please")}\""
         )
     }
 

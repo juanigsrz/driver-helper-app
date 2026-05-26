@@ -12,6 +12,8 @@ object OfferParser {
     fun detectPlatform(pkg: String): String? = when {
         "ubercab" in pkg -> "uber"
         "cabify"  in pkg -> "cabify"
+        // TEST fake targets — revert before shipping
+        "gallery" in pkg || "chrome" in pkg || "photos" in pkg -> "uber"
         else             -> null
     }
 

@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import logging
 import os
 from contextlib import asynccontextmanager
 from typing import Literal
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("dh")
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException
@@ -11,7 +15,7 @@ from pydantic import BaseModel, Field
 import offer_parse
 from geocode import GeocodeClient
 from osrm import OSRMClient
-from score import ScoreConfig, Verdict, compute_verdict
+from score import Leg, ScoreConfig, Verdict, compute_verdict
 
 load_dotenv()
 
@@ -109,6 +113,9 @@ async def evaluate(
     geo: GeocodeClient = app.state.geo
     osrm: OSRMClient = app.state.osrm
 
+    if body.raw_text:
+        log.info("raw_text:\n%s\n---", body.raw_text)
+
     # Fill missing fields from raw_text if Android couldn't parse them.
     price = body.price_ars
     if price is None and body.raw_text:
@@ -116,6 +123,21 @@ async def evaluate(
     if price is None or price <= 0:
         raise HTTPException(422, "missing or unparseable price_ars")
 
+    # Preferred path: distance pulled straight from the offer card OCR.
+    # Avoids fragile geocoding when Uber prints "(N km)" right in the popup.
+    if body.raw_text:
+        legs = offer_parse.parse_legs(body.raw_text)
+        if legs:
+            if len(legs) == 1:
+                deadhead_leg = Leg(distance_km=0.0, duration_min=0.0)
+                trip_leg = Leg(distance_km=legs[0][0], duration_min=legs[0][1])
+            else:
+                deadhead_leg = Leg(distance_km=legs[0][0], duration_min=legs[0][1])
+                trip_leg = Leg(distance_km=legs[1][0], duration_min=legs[1][1])
+            v: Verdict = compute_verdict(price, deadhead_leg, trip_leg, CFG)
+            return VerdictOut(**v.__dict__)
+
+    # Fallback: geocode addresses + route via OSRM.
     pickup_addr = body.pickup_addr
     dropoff_addr = body.dropoff_addr
     if (
@@ -136,7 +158,7 @@ async def evaluate(
     )
     trip = await osrm.route(pickup.lng, pickup.lat, dropoff.lng, dropoff.lat)
 
-    v: Verdict = compute_verdict(price, deadhead, trip, CFG)
+    v = compute_verdict(price, deadhead, trip, CFG)
     return VerdictOut(**v.__dict__)
 
 
