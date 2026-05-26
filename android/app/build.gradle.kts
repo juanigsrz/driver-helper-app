@@ -61,6 +61,7 @@ dependencies {
     implementation(libs.androidx.material3)
     debugImplementation(libs.androidx.ui.tooling)
 
+    implementation(libs.android.material)
     implementation(libs.mlkit.text.recognition)
     implementation(libs.play.services.location)
     implementation(libs.kotlinx.serialization.json)
