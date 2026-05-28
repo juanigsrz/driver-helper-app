@@ -36,6 +36,25 @@ object OfferParser {
         return norm.toDoubleOrNull()
     }
 
+    // "A17 min (7.6 km)" -> deadhead, "Viaje: 16 min (7.6 km)" -> trip.
+    // group(1) = minutes, group(2) = km. Ported 1:1 from backend LEG_RE.
+    private val LEG = Regex(
+        """(\d+)\s*min[^(\n]{0,30}\(?\s*(\d+(?:[.,]\d+)?)\s*km\)?""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** Return up to 2 (km, minutes) legs in document order. */
+    fun parseLegs(text: String): List<Leg> =
+        LEG.findAll(text)
+            .mapNotNull { m ->
+                val minutes = m.groupValues[1].toDoubleOrNull() ?: return@mapNotNull null
+                val km = m.groupValues[2].replace(",", ".").toDoubleOrNull()
+                    ?: return@mapNotNull null
+                Leg(distanceKm = km, durationMin = minutes)
+            }
+            .take(2)
+            .toList()
+
     /** SHA-1 of normalized lines so dedup ignores cosmetic flicker (surge badges, etc). */
     fun canonicalHash(platform: String, text: String): String {
         val normalized = text

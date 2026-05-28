@@ -1,20 +1,8 @@
-import java.util.Properties
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.kotlin.serialization)
 }
-
-val localProps = Properties().apply {
-    val f = rootProject.file("local.properties")
-    if (f.exists()) f.inputStream().use { load(it) }
-}
-fun prop(name: String, default: String): String =
-    localProps.getProperty(name)
-        ?: project.findProperty(name)?.toString()
-        ?: default
 
 android {
     namespace = "com.juanigsrz.driverhelper"
@@ -26,17 +14,6 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
-
-        buildConfigField(
-            "String",
-            "BACKEND_URL",
-            "\"${prop("BACKEND_URL", "https://example.invalid")}\""
-        )
-        buildConfigField(
-            "String",
-            "BACKEND_SECRET",
-            "\"${prop("BACKEND_SECRET", "change-me-please")}\""
-        )
     }
 
     buildTypes {
@@ -57,7 +34,6 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures {
         compose = true
-        buildConfig = true
     }
 }
 
@@ -74,8 +50,6 @@ dependencies {
 
     implementation(libs.android.material)
     implementation(libs.mlkit.text.recognition)
-    implementation(libs.play.services.location)
-    implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)
 }

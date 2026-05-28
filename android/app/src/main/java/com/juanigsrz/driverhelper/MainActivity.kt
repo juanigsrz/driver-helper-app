@@ -29,7 +29,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,10 +53,15 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun HomeScreen() {
     val ctx = LocalContext.current
+    val def = ScoreConfig.DEFAULT
     var status by remember { mutableStateOf("idle") }
-    var backendUrl by remember { mutableStateOf(AppSettings.backendUrl(ctx)) }
     var costPerKm by remember {
         mutableStateOf(AppSettings.costPerKm(ctx)?.let { "%.0f".format(it) } ?: "")
+    }
+    var commissionPct by remember {
+        mutableStateOf(
+            AppSettings.platformCommission(ctx)?.let { "%.0f".format(it * 100) } ?: ""
+        )
     }
     var minArsPerKm by remember {
         mutableStateOf(AppSettings.minArsPerKm(ctx)?.let { "%.0f".format(it) } ?: "")
@@ -71,25 +75,8 @@ private fun HomeScreen() {
         )
     }
     var savedMsg by remember { mutableStateOf("") }
-    var backendDefaults by remember { mutableStateOf<BackendConfig?>(null) }
-    var configErr by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(backendUrl) {
-        configErr = null
-        backendDefaults = null
-        try {
-            backendDefaults = BackendClient(backendUrl, BuildConfig.BACKEND_SECRET)
-                .fetchConfig()
-        } catch (t: Throwable) {
-            configErr = t.message ?: "fetch failed"
-        }
-    }
 
     val notifPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { /* user can retry */ }
-
-    val locationPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { /* user can retry */ }
 
@@ -108,10 +95,8 @@ private fun HomeScreen() {
         }
     }
 
-    fun defLabel(base: String, value: Double?, fmt: String): String {
-        val d = value ?: return "$base (default: ?)"
-        return "$base (default: ${fmt.format(d)})"
-    }
+    fun defLabel(base: String, default: Double, fmt: String): String =
+        "$base (default: ${fmt.format(default)})"
 
     Column(
         modifier = Modifier
@@ -123,29 +108,23 @@ private fun HomeScreen() {
         Text("driver-helper", style = MaterialTheme.typography.headlineMedium)
         Text("Status: $status")
         Text(
-            "Build default URL: ${BuildConfig.BACKEND_URL}",
+            "Scoring runs on-device — no backend needed.",
             style = MaterialTheme.typography.bodySmall,
         )
-        configErr?.let {
-            Text(
-                "Config fetch error: $it",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
 
-        OutlinedTextField(
-            value = backendUrl,
-            onValueChange = { backendUrl = it },
-            label = { Text("Backend URL (CF tunnel)") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
         OutlinedTextField(
             value = costPerKm,
             onValueChange = { costPerKm = it.filter { c -> c.isDigit() || c == '.' } },
+            label = { Text(defLabel("Cost per km (ARS)", def.costPerKm, "%.0f")) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = commissionPct,
+            onValueChange = { commissionPct = it.filter { c -> c.isDigit() || c == '.' } },
             label = {
-                Text(defLabel("Cost per km (ARS)", backendDefaults?.cost_per_km, "%.0f"))
+                Text(defLabel("Platform commission %", def.platformCommission * 100, "%.0f"))
             },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -154,9 +133,7 @@ private fun HomeScreen() {
         OutlinedTextField(
             value = minArsPerKm,
             onValueChange = { minArsPerKm = it.filter { c -> c.isDigit() || c == '.' } },
-            label = {
-                Text(defLabel("Min profit ARS/km", backendDefaults?.min_ars_per_km, "%.0f"))
-            },
+            label = { Text(defLabel("Min profit ARS/km", def.minArsPerKm, "%.0f")) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth(),
@@ -164,9 +141,7 @@ private fun HomeScreen() {
         OutlinedTextField(
             value = minArsPerHr,
             onValueChange = { minArsPerHr = it.filter { c -> c.isDigit() || c == '.' } },
-            label = {
-                Text(defLabel("Min profit ARS/hr", backendDefaults?.min_ars_per_hr, "%.0f"))
-            },
+            label = { Text(defLabel("Min profit ARS/hr", def.minArsPerHr, "%.0f")) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth(),
@@ -175,16 +150,15 @@ private fun HomeScreen() {
             value = deadheadPct,
             onValueChange = { deadheadPct = it.filter { c -> c.isDigit() || c == '.' } },
             label = {
-                val defPct = backendDefaults?.max_deadhead_ratio?.let { it * 100 }
-                Text(defLabel("Max deadhead %", defPct, "%.0f"))
+                Text(defLabel("Max deadhead %", def.maxDeadheadRatio * 100, "%.0f"))
             },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth(),
         )
         Button(onClick = {
-            AppSettings.setBackendUrl(ctx, backendUrl)
             AppSettings.setCostPerKm(ctx, costPerKm.toDoubleOrNull())
+            AppSettings.setPlatformCommission(ctx, commissionPct.toDoubleOrNull()?.div(100.0))
             AppSettings.setMinArsPerKm(ctx, minArsPerKm.toDoubleOrNull())
             AppSettings.setMinArsPerHr(ctx, minArsPerHr.toDoubleOrNull())
             AppSettings.setMaxDeadheadRatio(ctx, deadheadPct.toDoubleOrNull()?.div(100.0))
@@ -203,20 +177,16 @@ private fun HomeScreen() {
         }) { Text("1. Grant notifications") }
 
         Button(onClick = {
-            locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-        }) { Text("2. Grant location") }
-
-        Button(onClick = {
             ctx.startActivity(
                 Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
-        }) { Text("3. Grant usage access (Settings)") }
+        }) { Text("2. Grant usage access (Settings)") }
 
         Button(onClick = {
             val mpm = ctx.getSystemService<MediaProjectionManager>() ?: return@Button
             projectionLauncher.launch(mpm.createScreenCaptureIntent())
-        }) { Text("4. Start capture") }
+        }) { Text("3. Start capture") }
 
         OutlinedButton(onClick = {
             ctx.stopService(Intent(ctx, CaptureService::class.java))

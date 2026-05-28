@@ -11,6 +11,8 @@ import java.util.Locale
 object Notifier {
     private const val CHANNEL_ID = "verdict"
     private const val NOTIF_ID = 99
+    private const val UNPARSED_CHANNEL_ID = "unparsed"
+    private const val UNPARSED_NOTIF_ID = 98
     private val AR = Locale("es", "AR")
 
     private fun ensureChannel(ctx: Context) {
@@ -64,5 +66,30 @@ object Notifier {
             .build()
 
         ctx.getSystemService<NotificationManager>()?.notify(NOTIF_ID, notif)
+    }
+
+    private fun ensureUnparsedChannel(ctx: Context) {
+        val nm = ctx.getSystemService<NotificationManager>() ?: return
+        if (nm.getNotificationChannel(UNPARSED_CHANNEL_ID) != null) return
+        nm.createNotificationChannel(
+            NotificationChannel(
+                UNPARSED_CHANNEL_ID,
+                "Unparsed offers",
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply { description = "Offer seen but no distance row was OCR'd" }
+        )
+    }
+
+    /** Offer detected but no distance row parsed -> can't score; low-priority heads-up. */
+    fun showUnparsed(ctx: Context, price: Double?) {
+        ensureUnparsedChannel(ctx)
+        val priceStr = price?.let { String.format(AR, "%,.0f", it) } ?: "?"
+        val notif = NotificationCompat.Builder(ctx, UNPARSED_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_view)
+            .setContentTitle("👁 seen · \$$priceStr · no distance")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setAutoCancel(true)
+            .build()
+        ctx.getSystemService<NotificationManager>()?.notify(UNPARSED_NOTIF_ID, notif)
     }
 }

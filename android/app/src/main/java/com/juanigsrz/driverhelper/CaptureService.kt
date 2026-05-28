@@ -84,7 +84,6 @@ class CaptureService : Service() {
         projection = mpm.getMediaProjection(resultCode, resultData).also {
             it.registerCallback(projectionCallback, captureHandler)
         }
-        LocationProvider.start(this)
         startCapture()
         return START_STICKY
     }
@@ -182,28 +181,14 @@ class CaptureService : Service() {
                 if (!dedup.isNew(hash)) return@launch
 
                 val price = OfferParser.parsePrice(text)
-                val loc = LocationProvider.current(this@CaptureService) ?: run {
-                    Log.w(TAG, "no location; skip offer")
-                    return@launch
+                val legs = OfferParser.parseLegs(text)
+                val cfg = AppSettings.scoreConfig(this@CaptureService)
+                val verdict = evaluateOffer(price, legs, cfg)
+                if (verdict != null) {
+                    Notifier.showVerdict(this@CaptureService, verdict)
+                } else {
+                    Notifier.showUnparsed(this@CaptureService, price)
                 }
-
-                val client = BackendClient(
-                    AppSettings.backendUrl(this@CaptureService),
-                    BuildConfig.BACKEND_SECRET,
-                )
-                val verdict = client.evaluate(
-                    OfferIn(
-                        platform = platform,
-                        price_ars = price,
-                        driver = Point(loc.latitude, loc.longitude),
-                        raw_text = text,
-                        cost_per_km = AppSettings.costPerKm(this@CaptureService),
-                        min_ars_per_km = AppSettings.minArsPerKm(this@CaptureService),
-                        min_ars_per_hr = AppSettings.minArsPerHr(this@CaptureService),
-                        max_deadhead_ratio = AppSettings.maxDeadheadRatio(this@CaptureService),
-                    )
-                )
-                Notifier.showVerdict(this@CaptureService, verdict)
             } catch (t: Throwable) {
                 Log.w(TAG, "pipeline error: ${t.message}")
                 if (!cropped.isRecycled) cropped.recycle()
@@ -212,7 +197,6 @@ class CaptureService : Service() {
     }
 
     override fun onDestroy() {
-        LocationProvider.stop()
         scope.cancel()
         recognizer.close()
         virtualDisplay?.release()
