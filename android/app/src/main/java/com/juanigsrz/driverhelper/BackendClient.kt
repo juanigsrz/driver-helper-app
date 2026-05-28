@@ -22,6 +22,18 @@ data class OfferIn(
     val dropoff: Point? = null,
     val raw_text: String? = null,
     val cost_per_km: Double? = null,
+    val min_ars_per_km: Double? = null,
+    val min_ars_per_hr: Double? = null,
+    val max_deadhead_ratio: Double? = null,
+)
+
+@Serializable
+data class BackendConfig(
+    val cost_per_km: Double,
+    val platform_commission: Double,
+    val min_ars_per_km: Double,
+    val min_ars_per_hr: Double,
+    val max_deadhead_ratio: Double,
 )
 
 @Serializable
@@ -46,6 +58,24 @@ class BackendClient(
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = false
+    }
+
+    suspend fun fetchConfig(): BackendConfig = withContext(Dispatchers.IO) {
+        val url = URL("${baseUrl.trimEnd('/')}/config")
+        val conn = (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 5_000
+            readTimeout = 5_000
+        }
+        try {
+            if (conn.responseCode !in 200..299) {
+                throw RuntimeException("backend ${conn.responseCode}")
+            }
+            val txt = conn.inputStream.bufferedReader().readText()
+            json.decodeFromString(BackendConfig.serializer(), txt)
+        } finally {
+            conn.disconnect()
+        }
     }
 
     suspend fun evaluate(offer: OfferIn): VerdictOut = withContext(Dispatchers.IO) {

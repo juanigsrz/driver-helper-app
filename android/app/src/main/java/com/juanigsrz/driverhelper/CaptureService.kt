@@ -169,12 +169,13 @@ class CaptureService : Service() {
 
         scope.launch {
             try {
-                val text = recognizer
+                val rawText = recognizer
                     .process(InputImage.fromBitmap(cropped, 0))
                     .await()
                     .text
                 cropped.recycle()
 
+                val text = OfferParser.stripSelfNotif(rawText)
                 if (text.isBlank()) return@launch
 
                 val hash = OfferParser.canonicalHash(platform, text)
@@ -197,6 +198,9 @@ class CaptureService : Service() {
                         driver = Point(loc.latitude, loc.longitude),
                         raw_text = text,
                         cost_per_km = AppSettings.costPerKm(this@CaptureService),
+                        min_ars_per_km = AppSettings.minArsPerKm(this@CaptureService),
+                        min_ars_per_hr = AppSettings.minArsPerHr(this@CaptureService),
+                        max_deadhead_ratio = AppSettings.maxDeadheadRatio(this@CaptureService),
                     )
                 )
                 Notifier.showVerdict(this@CaptureService, verdict)

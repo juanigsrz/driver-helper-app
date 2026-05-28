@@ -70,7 +70,10 @@ class OfferIn(BaseModel):
     pickup: Point | None = None
     dropoff: Point | None = None
     raw_text: str | None = None
-    cost_per_km: float | None = Field(default=None, gt=0)
+    cost_per_km: float | None = Field(default=None, ge=0)
+    min_ars_per_km: float | None = Field(default=None, ge=0)
+    min_ars_per_hr: float | None = Field(default=None, ge=0)
+    max_deadhead_ratio: float | None = Field(default=None, ge=0, le=1)
 
 
 class VerdictOut(BaseModel):
@@ -125,7 +128,16 @@ async def evaluate(
     if price is None or price <= 0:
         raise HTTPException(422, "missing or unparseable price_ars")
 
-    cfg = CFG if body.cost_per_km is None else replace(CFG, cost_per_km=body.cost_per_km)
+    overrides: dict[str, float] = {}
+    if body.cost_per_km is not None:
+        overrides["cost_per_km"] = body.cost_per_km
+    if body.min_ars_per_km is not None:
+        overrides["min_ars_per_km"] = body.min_ars_per_km
+    if body.min_ars_per_hr is not None:
+        overrides["min_ars_per_hr"] = body.min_ars_per_hr
+    if body.max_deadhead_ratio is not None:
+        overrides["max_deadhead_ratio"] = body.max_deadhead_ratio
+    cfg = replace(CFG, **overrides) if overrides else CFG
 
     # Preferred path: distance pulled straight from the offer card OCR.
     # Avoids fragile geocoding when Uber prints "(N km)" right in the popup.
@@ -169,3 +181,14 @@ async def evaluate(
 @app.get("/healthz")
 async def healthz() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/config")
+async def config() -> dict[str, float]:
+    return {
+        "cost_per_km": CFG.cost_per_km,
+        "platform_commission": CFG.platform_commission,
+        "min_ars_per_km": CFG.min_ars_per_km,
+        "min_ars_per_hr": CFG.min_ars_per_hr,
+        "max_deadhead_ratio": CFG.max_deadhead_ratio,
+    }

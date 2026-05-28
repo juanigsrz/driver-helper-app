@@ -18,6 +18,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,7 +37,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.core.content.getSystemService
 
@@ -56,7 +59,31 @@ private fun HomeScreen() {
     var costPerKm by remember {
         mutableStateOf(AppSettings.costPerKm(ctx)?.let { "%.0f".format(it) } ?: "")
     }
+    var minArsPerKm by remember {
+        mutableStateOf(AppSettings.minArsPerKm(ctx)?.let { "%.0f".format(it) } ?: "")
+    }
+    var minArsPerHr by remember {
+        mutableStateOf(AppSettings.minArsPerHr(ctx)?.let { "%.0f".format(it) } ?: "")
+    }
+    var deadheadPct by remember {
+        mutableStateOf(
+            AppSettings.maxDeadheadRatio(ctx)?.let { "%.0f".format(it * 100) } ?: ""
+        )
+    }
     var savedMsg by remember { mutableStateOf("") }
+    var backendDefaults by remember { mutableStateOf<BackendConfig?>(null) }
+    var configErr by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(backendUrl) {
+        configErr = null
+        backendDefaults = null
+        try {
+            backendDefaults = BackendClient(backendUrl, BuildConfig.BACKEND_SECRET)
+                .fetchConfig()
+        } catch (t: Throwable) {
+            configErr = t.message ?: "fetch failed"
+        }
+    }
 
     val notifPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -81,16 +108,31 @@ private fun HomeScreen() {
         }
     }
 
+    fun defLabel(base: String, value: Double?, fmt: String): String {
+        val d = value ?: return "$base (default: ?)"
+        return "$base (default: ${fmt.format(d)})"
+    }
+
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("driver-helper", style = MaterialTheme.typography.headlineMedium)
         Text("Status: $status")
         Text(
-            "Build default: ${BuildConfig.BACKEND_URL}",
+            "Build default URL: ${BuildConfig.BACKEND_URL}",
             style = MaterialTheme.typography.bodySmall,
         )
+        configErr?.let {
+            Text(
+                "Config fetch error: $it",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
 
         OutlinedTextField(
             value = backendUrl,
@@ -102,7 +144,40 @@ private fun HomeScreen() {
         OutlinedTextField(
             value = costPerKm,
             onValueChange = { costPerKm = it.filter { c -> c.isDigit() || c == '.' } },
-            label = { Text("Cost per km (ARS, blank = backend default)") },
+            label = {
+                Text(defLabel("Cost per km (ARS)", backendDefaults?.cost_per_km, "%.0f"))
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = minArsPerKm,
+            onValueChange = { minArsPerKm = it.filter { c -> c.isDigit() || c == '.' } },
+            label = {
+                Text(defLabel("Min profit ARS/km", backendDefaults?.min_ars_per_km, "%.0f"))
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = minArsPerHr,
+            onValueChange = { minArsPerHr = it.filter { c -> c.isDigit() || c == '.' } },
+            label = {
+                Text(defLabel("Min profit ARS/hr", backendDefaults?.min_ars_per_hr, "%.0f"))
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = deadheadPct,
+            onValueChange = { deadheadPct = it.filter { c -> c.isDigit() || c == '.' } },
+            label = {
+                val defPct = backendDefaults?.max_deadhead_ratio?.let { it * 100 }
+                Text(defLabel("Max deadhead %", defPct, "%.0f"))
+            },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth(),
@@ -110,6 +185,9 @@ private fun HomeScreen() {
         Button(onClick = {
             AppSettings.setBackendUrl(ctx, backendUrl)
             AppSettings.setCostPerKm(ctx, costPerKm.toDoubleOrNull())
+            AppSettings.setMinArsPerKm(ctx, minArsPerKm.toDoubleOrNull())
+            AppSettings.setMinArsPerHr(ctx, minArsPerHr.toDoubleOrNull())
+            AppSettings.setMaxDeadheadRatio(ctx, deadheadPct.toDoubleOrNull()?.div(100.0))
             savedMsg = "Saved"
         }) { Text("Save settings") }
         if (savedMsg.isNotEmpty()) {

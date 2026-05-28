@@ -5,7 +5,13 @@ import java.security.MessageDigest
 object OfferParser {
 
     private val PRICE = Regex(
-        """(?:\$|ARS)\s*(\d{1,3}(?:\.\d{3})+(?:,\d{2})?|\d+(?:,\d{2})?)""",
+        """(?:\$|ARS)\s*(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})?|\d+(?:[.,]\d{2})?)""",
+        RegexOption.IGNORE_CASE,
+    )
+    private val THOUSANDS_SEP = Regex("""[.,](?=\d{3}(?:\D|$))""")
+
+    private val SELF_NOTIF = Regex(
+        """^\s*(?:[\uD83D-\uDBFF][\uDC00-\uDFFF]\s*)?(?:SKIP|TAKE|MAYBE)\b""",
         RegexOption.IGNORE_CASE,
     )
 
@@ -17,10 +23,17 @@ object OfferParser {
         else             -> null
     }
 
+    fun stripSelfNotif(text: String): String =
+        text.lineSequence()
+            .filterNot { SELF_NOTIF.containsMatchIn(it) }
+            .joinToString("\n")
+
     fun parsePrice(text: String): Double? {
         val m = PRICE.find(text) ?: return null
-        val raw = m.groupValues[1].replace(".", "").replace(",", ".")
-        return raw.toDoubleOrNull()
+        val norm = m.groupValues[1]
+            .replace(THOUSANDS_SEP, "")
+            .replace(",", ".")
+        return norm.toDoubleOrNull()
     }
 
     /** SHA-1 of normalized lines so dedup ignores cosmetic flicker (surge badges, etc). */
