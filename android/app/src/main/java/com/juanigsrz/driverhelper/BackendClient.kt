@@ -21,6 +21,7 @@ data class OfferIn(
     val pickup: Point? = null,
     val dropoff: Point? = null,
     val raw_text: String? = null,
+    val cost_per_km: Double? = null,
 )
 
 @Serializable

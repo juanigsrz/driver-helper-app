@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from typing import Literal
 
 logging.basicConfig(level=logging.INFO)
@@ -69,6 +70,7 @@ class OfferIn(BaseModel):
     pickup: Point | None = None
     dropoff: Point | None = None
     raw_text: str | None = None
+    cost_per_km: float | None = Field(default=None, gt=0)
 
 
 class VerdictOut(BaseModel):
@@ -123,6 +125,8 @@ async def evaluate(
     if price is None or price <= 0:
         raise HTTPException(422, "missing or unparseable price_ars")
 
+    cfg = CFG if body.cost_per_km is None else replace(CFG, cost_per_km=body.cost_per_km)
+
     # Preferred path: distance pulled straight from the offer card OCR.
     # Avoids fragile geocoding when Uber prints "(N km)" right in the popup.
     if body.raw_text:
@@ -134,7 +138,7 @@ async def evaluate(
             else:
                 deadhead_leg = Leg(distance_km=legs[0][0], duration_min=legs[0][1])
                 trip_leg = Leg(distance_km=legs[1][0], duration_min=legs[1][1])
-            v: Verdict = compute_verdict(price, deadhead_leg, trip_leg, CFG)
+            v: Verdict = compute_verdict(price, deadhead_leg, trip_leg, cfg)
             return VerdictOut(**v.__dict__)
 
     # Fallback: geocode addresses + route via OSRM.
@@ -158,7 +162,7 @@ async def evaluate(
     )
     trip = await osrm.route(pickup.lng, pickup.lat, dropoff.lng, dropoff.lat)
 
-    v = compute_verdict(price, deadhead, trip, CFG)
+    v = compute_verdict(price, deadhead, trip, cfg)
     return VerdictOut(**v.__dict__)
 
 

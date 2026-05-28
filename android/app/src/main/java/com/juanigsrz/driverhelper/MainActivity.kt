@@ -16,10 +16,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,6 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.core.content.getSystemService
 
@@ -47,6 +52,11 @@ class MainActivity : ComponentActivity() {
 private fun HomeScreen() {
     val ctx = LocalContext.current
     var status by remember { mutableStateOf("idle") }
+    var backendUrl by remember { mutableStateOf(AppSettings.backendUrl(ctx)) }
+    var costPerKm by remember {
+        mutableStateOf(AppSettings.costPerKm(ctx)?.let { "%.0f".format(it) } ?: "")
+    }
+    var savedMsg by remember { mutableStateOf("") }
 
     val notifPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -78,9 +88,35 @@ private fun HomeScreen() {
         Text("driver-helper", style = MaterialTheme.typography.headlineMedium)
         Text("Status: $status")
         Text(
-            "Backend: ${BuildConfig.BACKEND_URL}",
+            "Build default: ${BuildConfig.BACKEND_URL}",
             style = MaterialTheme.typography.bodySmall,
         )
+
+        OutlinedTextField(
+            value = backendUrl,
+            onValueChange = { backendUrl = it },
+            label = { Text("Backend URL (CF tunnel)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = costPerKm,
+            onValueChange = { costPerKm = it.filter { c -> c.isDigit() || c == '.' } },
+            label = { Text("Cost per km (ARS, blank = backend default)") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Button(onClick = {
+            AppSettings.setBackendUrl(ctx, backendUrl)
+            AppSettings.setCostPerKm(ctx, costPerKm.toDoubleOrNull())
+            savedMsg = "Saved"
+        }) { Text("Save settings") }
+        if (savedMsg.isNotEmpty()) {
+            Text(savedMsg, style = MaterialTheme.typography.bodySmall)
+        }
+
+        HorizontalDivider()
 
         Button(onClick = {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

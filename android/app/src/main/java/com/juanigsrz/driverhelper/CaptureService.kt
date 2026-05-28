@@ -54,9 +54,6 @@ class CaptureService : Service() {
     private val recognizer =
         TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     private val dedup = DedupCache()
-    private val backend by lazy {
-        BackendClient(BuildConfig.BACKEND_URL, BuildConfig.BACKEND_SECRET)
-    }
 
     private var lastSampleAtMs = 0L
 
@@ -87,6 +84,7 @@ class CaptureService : Service() {
         projection = mpm.getMediaProjection(resultCode, resultData).also {
             it.registerCallback(projectionCallback, captureHandler)
         }
+        LocationProvider.start(this)
         startCapture()
         return START_STICKY
     }
@@ -188,12 +186,17 @@ class CaptureService : Service() {
                     return@launch
                 }
 
-                val verdict = backend.evaluate(
+                val client = BackendClient(
+                    AppSettings.backendUrl(this@CaptureService),
+                    BuildConfig.BACKEND_SECRET,
+                )
+                val verdict = client.evaluate(
                     OfferIn(
                         platform = platform,
                         price_ars = price,
                         driver = Point(loc.latitude, loc.longitude),
                         raw_text = text,
+                        cost_per_km = AppSettings.costPerKm(this@CaptureService),
                     )
                 )
                 Notifier.showVerdict(this@CaptureService, verdict)
@@ -205,6 +208,7 @@ class CaptureService : Service() {
     }
 
     override fun onDestroy() {
+        LocationProvider.stop()
         scope.cancel()
         recognizer.close()
         virtualDisplay?.release()
